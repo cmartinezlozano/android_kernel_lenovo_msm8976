@@ -226,7 +226,7 @@ static int lp855x_configure(struct lp855x *lp)
 	
 	//val = pd->device_control;
 	//printk(KERN_ERR"yxw test device_control=%x\n",pd->device_control);
-	val = 0x03;
+	val = 0x01;
 	ret = lp855x_write_byte(lp, lp->cfg->reg_devicectrl, val);
 	if (ret)
 		goto err;
