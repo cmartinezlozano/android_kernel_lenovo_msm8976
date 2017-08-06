@@ -24,6 +24,7 @@
 #include <linux/msm-bus.h>
 #include <linux/msm-bus-board.h>
 
+int is_igc_configured;
 struct mdp_csc_cfg mdp_csc_convert[MDSS_MDP_MAX_CSC] = {
 	[MDSS_MDP_CSC_YUV2RGB_601L] = {
 		0,
@@ -953,9 +954,13 @@ static void pp_igc_config(unsigned long flags, char __iomem *addr,
 {
 	u32 tbl_idx;
 	if (flags & PP_FLAGS_DIRTY_IGC) {
-		if (igc_config->ops & MDP_PP_OPS_WRITE)
+		trace_printk("sravank pcc igc \n");
+		if ((igc_config->ops & MDP_PP_OPS_WRITE) &&
+			(is_igc_configured == 0)) {
 			pp_update_igc_lut(igc_config, addr, pipe_num,
 					 pipe_cnt);
+			is_igc_configured = 1;
+		}
 
 		if (igc_config->ops & MDP_PP_IGC_FLAG_ROM0) {
 			pp_sts->pcc_sts |= PP_STS_ENABLE;
@@ -2162,6 +2167,8 @@ int mdss_mdp_pp_resume(struct mdss_mdp_ctl *ctl, u32 dspp_num)
 	disp_num = ctl->mfd->index;
 	pp_sts = mdss_pp_res->pp_disp_sts[disp_num];
 
+	is_igc_configured = 0;
+
 	if (pp_sts.pa_sts & PP_STS_ENABLE) {
 		flags |= PP_FLAGS_DIRTY_PA;
 		if (mdata->mdp_rev >= MDSS_MDP_HW_REV_103) {
@@ -2279,6 +2286,8 @@ int mdss_mdp_pp_init(struct device *dev)
 
 	if (!mdata)
 		return -EPERM;
+
+	is_igc_configured = 0;
 
 	mutex_lock(&mdss_pp_mutex);
 	if (!mdss_pp_res) {
