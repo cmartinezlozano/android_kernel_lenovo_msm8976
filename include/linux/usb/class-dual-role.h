@@ -1,12 +1,9 @@
 #ifndef __LINUX_CLASS_DUAL_ROLE_H__
 #define __LINUX_CLASS_DUAL_ROLE_H__
-
 #include <linux/workqueue.h>
 #include <linux/errno.h>
 #include <linux/types.h>
-
 struct device;
-
 enum dual_role_supported_modes {
 	DUAL_ROLE_SUPPORTED_MODES_DFP_AND_UFP = 0,
 	DUAL_ROLE_SUPPORTED_MODES_DFP,
@@ -29,7 +26,6 @@ enum {
 	DUAL_ROLE_PROP_PR_NONE,
 /*The following should be the last element*/
 	DUAL_ROLE_PROP_PR_TOTAL,
-
 };
 
 enum {
