@@ -93,8 +93,6 @@ static void lp855x_lcd_bl_set(struct led_classdev *led_cdev,
 
 	lp = container_of(led_cdev, struct lp855x, cdev);
 
-	printk("++value=%d+++++%s__________\n",value,__func__);
-	//printk(KERN_ERR"+++yxw test reg10=%x\n",lp855x_read_byte(lp,0x10));
 	if((value > 0)&&(value < 5)){
 		value = 5;
 	}
@@ -222,16 +220,11 @@ static int lp855x_configure(struct lp855x *lp)
 	ret = lp855x_write_byte(lp, 0x11, val);
 	if (ret)
 		goto err;
-	//printk(KERN_ERR"+++yhj test reg11=%x\n",lp855x_read_byte(lp,0x11));
-	
-	//val = pd->device_control;
-	//printk(KERN_ERR"yxw test device_control=%x\n",pd->device_control);
+
 	val = 0x01;
 	ret = lp855x_write_byte(lp, lp->cfg->reg_devicectrl, val);
 	if (ret)
 		goto err;
-
-	printk(KERN_ERR"+++yhj check test reg10=%x\n",lp855x_read_byte(lp,0x10));
 
 	if (pd->size_program > 0) {
 		for (i = 0; i < pd->size_program; i++) {
@@ -395,10 +388,9 @@ static ssize_t lp855x_set_cabc_mode(struct device *dev,
 
 	cabc_auto = -1;
 	sscanf(buf, "%d", &cabc_auto);
-	
+
 	pre_bl = lp855x_read_byte(lp, lp->cfg->reg_brightness);
-	printk(KERN_ERR"--- %s ,lp->cfg->reg_brightness,pre_bl = 0x%x",__func__,pre_bl);
-	
+
 	if (cabc_auto) {
 		lp855x_update_bit(lp, LP8557_BL_CMD, LP8557_BL_MASK,LP8557_BL_OFF);
 		val = 0x03;
@@ -406,8 +398,7 @@ static ssize_t lp855x_set_cabc_mode(struct device *dev,
 		if(ret ){
 			printk(KERN_ERR"--lp855x_set_cabc_mode lp855x_write_byte error .\n");
 		}
-		//printk(KERN_ERR"--lp855x_set_cabc_mode enable cabc_auto = %d,val = 0x%x ,reg10 = 0x%x.\n",cabc_auto,val,lp855x_read_byte(lp,lp->cfg->reg_devicectrl));
-		
+
 	} else {
 		lp855x_update_bit(lp, LP8557_BL_CMD, LP8557_BL_MASK,LP8557_BL_OFF);
 		val = 0x01;
@@ -415,11 +406,9 @@ static ssize_t lp855x_set_cabc_mode(struct device *dev,
 		if(ret ){
 			printk(KERN_ERR"--lp855x_set_cabc_mode lp855x_write_byte error .\n");
 		}
-		//printk(KERN_ERR"--lp855x_set_cabc_mode disable cabc_auto = %d,val = 0x%x ,reg10 = 0x%x.\n",cabc_auto,val,lp855x_read_byte(lp,lp->cfg->reg_devicectrl));
 	}
-	
-		lp855x_update_bit(lp, LP8557_BL_CMD, LP8557_BL_MASK,LP8557_BL_ON);
-		
+	lp855x_update_bit(lp, LP8557_BL_CMD, LP8557_BL_MASK,LP8557_BL_ON);
+
 	return count;
 }
 
@@ -489,20 +478,7 @@ static int lp855x_parse_dt(struct device *dev, struct device_node *node)
 	return -EINVAL;
 }
 #endif
-//yxw add for test
-void read_lp85579_reg(struct lp855x *lp)
-{
-	printk(KERN_ERR"+++ read_lp855x reg00=0x%x\n",lp855x_read_byte(lp,0x00));
-	printk(KERN_ERR"+++ read_lp855x reg01=0x%x\n",lp855x_read_byte(lp,0x01));
-	printk(KERN_ERR"+++ read_lp855x reg03=0x%x\n",lp855x_read_byte(lp,0x03));
-	printk(KERN_ERR"+++ read_lp855x reg04=0x%x\n",lp855x_read_byte(lp,0x04));
-	printk(KERN_ERR"+++ read_lp855x reg10=0x%x\n",lp855x_read_byte(lp,0x10));
-	printk(KERN_ERR"+++ read_lp855x reg11=0x%x\n",lp855x_read_byte(lp,0x11));
-	printk(KERN_ERR"+++ read_lp855x reg12=0x%x\n",lp855x_read_byte(lp,0x12));
-	printk(KERN_ERR"+++ read_lp855x reg13=0x%x\n",lp855x_read_byte(lp,0x13));
-	printk(KERN_ERR"+++ read_lp855x reg14=0x%x\n",lp855x_read_byte(lp,0x14));
-	printk(KERN_ERR"+++ read_lp855x reg15=0x%x\n",lp855x_read_byte(lp,0x15));
-}
+
 static int lp855x_probe(struct i2c_client *cl, const struct i2c_device_id *id)
 {
 	struct lp855x *lp;
@@ -543,7 +519,6 @@ static int lp855x_probe(struct i2c_client *cl, const struct i2c_device_id *id)
 		dev_err(lp->dev, "device config err: %d", ret);
 		goto err_dev;
 	}
-	read_lp85579_reg(lp);
 
 	ret = lp855x_backlight_register(lp);
 	if (ret) {
@@ -605,7 +580,6 @@ static void lp855x_shutdown(struct i2c_client *cl)
 static int lp855x_suspend(struct device *dev)
 {
 	struct lp855x *lp = bl_info;
-	printk("---yhj check in %s .\n",__func__);
 	return lp855x_update_bit(lp, LP8557_BL_CMD, LP8557_BL_MASK,
 				LP8557_BL_OFF);
 }
@@ -613,7 +587,6 @@ static int lp855x_suspend(struct device *dev)
 static int lp855x_resume(struct device *dev)
 {
 	struct lp855x *lp = bl_info;
-	printk("---yhj check in %s .\n",__func__);
 	return lp855x_update_bit(lp, LP8557_BL_CMD, LP8557_BL_MASK,
 				LP8557_BL_ON);
 }
