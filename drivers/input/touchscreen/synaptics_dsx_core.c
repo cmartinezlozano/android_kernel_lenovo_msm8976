@@ -3777,9 +3777,11 @@ static int synaptics_rmi4_suspend(struct device *dev)
 
 		
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	dt2w_scr_suspended = true;
-	enable_irq_wake(rmi4_data->irq);
-	return 0;
+	if (dt2w_switch) {
+		dt2w_scr_suspended = true;
+		enable_irq_wake(rmi4_data->irq);
+		return 0;
+	}
 #endif
 
 	if (rmi4_data->stay_awake)
@@ -3833,9 +3835,11 @@ static int synaptics_rmi4_resume(struct device *dev)
 				rmi4_data->hw_if->board_data;  
 
 #ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	dt2w_scr_suspended = false;
-	disable_irq_wake(rmi4_data->irq);
-	return 0;
+	if (dt2w_switch) {
+		dt2w_scr_suspended = false;
+		disable_irq_wake(rmi4_data->irq);
+		return 0;
+	}
 #endif
 
 	if (rmi4_data->stay_awake)

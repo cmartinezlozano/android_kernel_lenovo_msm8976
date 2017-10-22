@@ -74,7 +74,7 @@ MODULE_LICENSE("GPLv2");
 #define DT2W_DEFAULT       1
 
 #define DT2W_PWRKEY_DUR   60
-#define DT2W_FEATHER      50
+#define DT2W_FEATHER     150
 #define DT2W_TIME        600
 
 /* Resources */
@@ -384,18 +384,15 @@ static ssize_t dt2w_doubletap2wake_show(struct device *dev,
 static ssize_t dt2w_doubletap2wake_dump(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
-	if (buf[1] == '\n') {
-		if (buf[0] == '0') {
-			dt2w_switch = 0;
-		} else if (buf[0] == '1') {
-			dt2w_switch = 1;
-		}
-	}
-
+	if (buf[0] != '0') 
+		dt2w_switch = 1;
+	 else 
+		dt2w_switch = 0;
+		
 	return count;
 }
 
-static DEVICE_ATTR(doubletap2wake, (S_IWUSR|S_IRUGO),
+static DEVICE_ATTR(doubletap2wake, (S_IRUGO|S_IWUGO),
 	dt2w_doubletap2wake_show, dt2w_doubletap2wake_dump);
 
 static ssize_t dt2w_version_show(struct device *dev,
@@ -414,7 +411,7 @@ static ssize_t dt2w_version_dump(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(doubletap2wake_version, (S_IWUSR|S_IRUGO),
+static DEVICE_ATTR(doubletap2wake_version, (S_IRUGO),
 	dt2w_version_show, dt2w_version_dump);
 
 /*
