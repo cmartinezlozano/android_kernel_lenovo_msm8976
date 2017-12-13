@@ -1404,10 +1404,6 @@ static int synaptics_rmi4_irq_enable(struct synaptics_rmi4_data *rmi4_data,
 			rmi4_data->hw_if->board_data;
 	long irq_flags = bdata->irq_flags;
 
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-	irq_flags |= IRQF_NO_SUSPEND;
-#endif
-
 	if (attn_only) {
 		retval = synaptics_rmi4_int_enable(rmi4_data, enable);
 		return retval;
