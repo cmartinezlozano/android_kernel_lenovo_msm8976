@@ -2468,14 +2468,20 @@ struct mass_storage_function_config {
 static int mass_storage_function_init(struct android_usb_function *f,
 					struct usb_composite_dev *cdev)
 {
-	//struct android_dev *dev = cdev_to_android_dev(cdev);
+#if 0
+	struct android_dev *dev = cdev_to_android_dev(cdev);
+#endif
 	struct mass_storage_function_config *config;
 	struct fsg_common *common;
 	int err;
-	int i;// n;
+	int i;
+#if 0
+    int n;
+#endif
 	char name[FSG_MAX_LUNS][MAX_LUN_NAME];
-	//u8 uicc_nluns = dev->pdata ? dev->pdata->uicc_nluns : 0;
-    printk(KERN_ERR "***wzj***config->common->bicr \n");
+#if 0
+	u8 uicc_nluns = dev->pdata ? dev->pdata->uicc_nluns : 0;
+#endif
 	config = kzalloc(sizeof(struct mass_storage_function_config),
 							GFP_KERNEL);
 	if (!config) {
@@ -2486,10 +2492,8 @@ static int mass_storage_function_init(struct android_usb_function *f,
 	config->fsg.nluns = 1;
 	snprintf(name[0], MAX_LUN_NAME, "lun");
 	config->fsg.luns[0].removable = 1;
-#if 0
-	snprintf(name[0], MAX_LUN_NAME, "lun");
-	config->fsg.luns[0].removable = 1;
 
+#if 0
 	if (dev->pdata && dev->pdata->cdrom) {
 		config->fsg.luns[config->fsg.nluns].cdrom = 1;
 		config->fsg.luns[config->fsg.nluns].ro = 1;
@@ -2509,8 +2513,8 @@ static int mass_storage_function_init(struct android_usb_function *f,
 		config->fsg.luns[n].removable = 1;
 		config->fsg.nluns++;
 	}
-
 #endif
+
 	common = fsg_common_init(NULL, cdev, &config->fsg);
 	if (IS_ERR(common)) {
 		kfree(config);

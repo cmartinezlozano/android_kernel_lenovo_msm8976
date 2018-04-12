@@ -475,7 +475,7 @@ static ssize_t wcnss_wlan_macaddr_show(struct device *dev,
 		penv->wlan_nv_macAddr[4], penv->wlan_nv_macAddr[5]);
 }
 
-static DEVICE_ATTR(wcnss_mac_addr, 644,
+static DEVICE_ATTR(wcnss_mac_addr, S_IRUSR | S_IWUSR,
 	wcnss_wlan_macaddr_show, wcnss_wlan_macaddr_store);
 
 static ssize_t wcnss_serial_number_show(struct device *dev,

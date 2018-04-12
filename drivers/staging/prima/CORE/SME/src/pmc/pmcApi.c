@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -205,6 +205,7 @@ eHalStatus pmcStart (tHalHandle hHal)
     pMac->pmc.wowlExitSrc = eWOWL_EXIT_USER;
     pMac->pmc.bmpsRequestedByHdd = FALSE;
     pMac->pmc.remainInPowerActiveTillDHCP = FALSE;
+    pMac->pmc.full_power_till_set_key = false;
     pMac->pmc.remainInPowerActiveThreshold = 0;
 
     /* WLAN Switch initial states. */
@@ -2203,18 +2204,12 @@ eHalStatus pmcWowlAddBcastPattern (
     if(pattern == NULL)
     {
         pmcLog(pMac, LOGE, FL("Null broadcast pattern being passed"));
-#ifdef FEATURE_WLAN_DIAG_SUPPORT
-        WLAN_VOS_DIAG_LOG_FREE(log_ptr);
-#endif
         return eHAL_STATUS_FAILURE;
     }
 
     if( pSession == NULL)
     {
         pmcLog(pMac, LOGE, FL("Session not found "));
-#ifdef FEATURE_WLAN_DIAG_SUPPORT
-        WLAN_VOS_DIAG_LOG_FREE(log_ptr);
-#endif
         return eHAL_STATUS_FAILURE;
     }
 
@@ -2263,11 +2258,14 @@ eHalStatus pmcWowlAddBcastPattern (
         return eHAL_STATUS_FAILURE;
     }
 
-    if( !csrIsConnStateConnected(pMac, sessionId) )
+    if (!(CSR_IS_INFRA_AP(pSession->pCurRoamProfile)))
     {
-        pmcLog(pMac, LOGE, FL("Cannot add WoWL Pattern session in %d state"),
-           pSession->connectState);
-        return eHAL_STATUS_FAILURE;
+       if( !csrIsConnStateConnected(pMac, sessionId) )
+       {
+          pmcLog(pMac, LOGE, FL("Cannot add WoWL Pattern session in %d state"),
+                 pSession->connectState);
+           return eHAL_STATUS_FAILURE;
+       }
     }
 
     vos_mem_copy(pattern->bssId, pSession->connectedProfile.bssid, sizeof(tSirMacAddr));
@@ -2453,11 +2451,22 @@ eHalStatus pmcEnterWowl (
        return eHAL_STATUS_FAILURE;
    }
 
-   /* Check if BMPS is enabled. */
-   if (!pMac->pmc.bmpsEnabled)
+   if ((!(CSR_IS_INFRA_AP(pSession->pCurRoamProfile)))
+                 && !(vos_get_concurrency_mode()& VOS_STA_SAP))
    {
-      pmcLog(pMac, LOGE, "PMC: Cannot enter WoWL. BMPS is disabled");
-      return eHAL_STATUS_PMC_DISABLED;
+      /* Check if BMPS is enabled. */
+      if (!pMac->pmc.bmpsEnabled)
+      {
+         pmcLog(pMac, LOGE, "PMC: Cannot enter WoWL. BMPS is disabled");
+         return eHAL_STATUS_PMC_DISABLED;
+      }
+      /* Check that we are associated with single Session. */
+      if (!pmcValidateConnectState( pMac ))
+      {
+         pmcLog(pMac, LOGE, "PMC: Cannot enable WOWL. STA not associated "
+             "with an Access Point in Infra Mode with single active session");
+          return eHAL_STATUS_FAILURE;
+      }
    }
 
    /* Check if WoWL is enabled. */
@@ -2465,14 +2474,6 @@ eHalStatus pmcEnterWowl (
    {
       pmcLog(pMac, LOGE, "PMC: Cannot enter WoWL. WoWL is disabled");
       return eHAL_STATUS_PMC_DISABLED;
-   }
-
-   /* Check that we are associated with single Session. */
-   if (!pmcValidateConnectState( pMac ))
-   {
-      pmcLog(pMac, LOGE, "PMC: Cannot enable WOWL. STA not associated "
-             "with an Access Point in Infra Mode with single active session");
-      return eHAL_STATUS_FAILURE;
    }
 
    /* Is there a pending UAPSD request? HDD should have triggered QoS

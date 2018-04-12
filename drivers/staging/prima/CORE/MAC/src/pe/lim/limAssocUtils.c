@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2017 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -690,13 +690,13 @@ limCleanupRxPath(tpAniSirGlobal pMac, tpDphHashNode pStaDs,tpPESession psessionE
              * There is no context at Polaris to delete.
              * Release our assigned AID back to the free pool
              */
-            if ((psessionEntry->limSystemRole == eLIM_AP_ROLE) || 
+            if ((psessionEntry->limSystemRole == eLIM_AP_ROLE) ||
                 (psessionEntry->limSystemRole == eLIM_BT_AMP_AP_ROLE))
-            {    
+            {
+                limDelSta(pMac, pStaDs, false, psessionEntry);
                 limReleasePeerIdx(pMac, pStaDs->assocId, psessionEntry);
             }
             limDeleteDphHashEntry(pMac, pStaDs->staAddr, pStaDs->assocId,psessionEntry);
-
             return retCode;
         }
     }
@@ -823,15 +823,14 @@ limSendDelStaCnf(tpAniSirGlobal pMac, tSirMacAddr staDsAddr,
 
         psessionEntry->limAID = 0;
 
-
     }
 
     if ((mlmStaContext.cleanupTrigger ==
                                       eLIM_HOST_DISASSOC) ||
         (mlmStaContext.cleanupTrigger ==
-                                      eLIM_LINK_MONITORING_DISASSOC) ||
+                                      eLIM_PROMISCUOUS_MODE_DISASSOC) ||
         (mlmStaContext.cleanupTrigger ==
-                                      eLIM_PROMISCUOUS_MODE_DISASSOC))
+                                      eLIM_LINK_MONITORING_DISASSOC))
     {
         /**
          * Host or LMM driven Disassociation.
@@ -845,6 +844,7 @@ limSendDelStaCnf(tpAniSirGlobal pMac, tSirMacAddr staDsAddr,
                      (tANI_U8 *) staDsAddr,
                       sizeof(tSirMacAddr));
         mlmDisassocCnf.resultCode = statusCode;
+        mlmDisassocCnf.aid          = staDsAssocId;
         mlmDisassocCnf.disassocTrigger =
                                    mlmStaContext.cleanupTrigger;
         /* Update PE session Id*/
@@ -854,10 +854,8 @@ limSendDelStaCnf(tpAniSirGlobal pMac, tSirMacAddr staDsAddr,
                           LIM_MLM_DISASSOC_CNF,
                           (tANI_U32 *) &mlmDisassocCnf);
     }
-    else if ((mlmStaContext.cleanupTrigger ==
-                                           eLIM_HOST_DEAUTH) ||
-             (mlmStaContext.cleanupTrigger ==
-                                           eLIM_LINK_MONITORING_DEAUTH))
+    else if ((mlmStaContext.cleanupTrigger == eLIM_HOST_DEAUTH) ||
+             (mlmStaContext.cleanupTrigger == eLIM_LINK_MONITORING_DEAUTH))
     {
         /**
          * Host or LMM driven Deauthentication.
@@ -869,6 +867,7 @@ limSendDelStaCnf(tpAniSirGlobal pMac, tSirMacAddr staDsAddr,
                      (tANI_U8 *) staDsAddr,
                       sizeof(tSirMacAddr));
         mlmDeauthCnf.resultCode    = statusCode;
+        mlmDeauthCnf.aid           = staDsAssocId;
         mlmDeauthCnf.deauthTrigger =
                                    mlmStaContext.cleanupTrigger;
         /* PE session Id */
@@ -2422,7 +2421,15 @@ limAddSta(
     }
     else
 #endif
-        pAddStaParams->staIdx = HAL_STA_INVALID_IDX;
+#ifdef SAP_AUTH_OFFLOAD
+        if (!pMac->sap_auth_offload)
+            pAddStaParams->staIdx = HAL_STA_INVALID_IDX;
+        else
+            pAddStaParams->staIdx = pStaDs->staIndex;
+#else
+            pAddStaParams->staIdx = HAL_STA_INVALID_IDX;
+#endif
+
     pAddStaParams->staType = pStaDs->staType;
 
     pAddStaParams->updateSta = updateEntry;
@@ -2520,8 +2527,14 @@ limAddSta(
         }
         else
         {
-            pAddStaParams->htLdpcCapable = pStaDs->htLdpcCapable;
-            pAddStaParams->vhtLdpcCapable = pStaDs->vhtLdpcCapable;
+            if (psessionEntry->txLdpcIniFeatureEnabled & 0x1)
+                pAddStaParams->htLdpcCapable = pStaDs->htLdpcCapable;
+            else
+                pAddStaParams->htLdpcCapable = 0;
+            if (psessionEntry->txLdpcIniFeatureEnabled & 0x2)
+                pAddStaParams->vhtLdpcCapable = pStaDs->vhtLdpcCapable;
+            else
+                pAddStaParams->vhtLdpcCapable = 0;
         }
     }
     else if( STA_ENTRY_SELF == pStaDs->staType)
@@ -2588,11 +2601,30 @@ limAddSta(
     "p2pCapableSta: %d"), pAddStaParams->htLdpcCapable,
     pAddStaParams->vhtLdpcCapable, pAddStaParams->p2pCapableSta);
 
+#ifdef SAP_AUTH_OFFLOAD
+    if (pMac->sap_auth_offload) {
+        pAddStaParams->dpuIndex =  pStaDs->dpuIndex;
+        pAddStaParams->bcastDpuIndex = pStaDs->bcastDpuIndex;
+        pAddStaParams->bcastMgmtDpuIdx = pStaDs->bcastMgmtDpuIdx;
+        pAddStaParams->ucUcastSig = pStaDs->ucUcastSig;
+        pAddStaParams->ucBcastSig = pStaDs->ucBcastSig;
+        pAddStaParams->ucMgmtSig = pStaDs->ucMgmtSig;
+        pAddStaParams->bssIdx =  pStaDs->bssId;
+    }
+#endif
+
     //we need to defer the message until we get the response back from HAL.
     if (pAddStaParams->respReqd)
         SET_LIM_PROCESS_DEFD_MESGS(pMac, false);
 
-    msgQ.type = WDA_ADD_STA_REQ;
+#ifdef SAP_AUTH_OFFLOAD
+    if (pMac->sap_auth_offload && LIM_IS_AP_ROLE(psessionEntry))
+        msgQ.type = WDA_SAP_OFL_ADD_STA;
+    else
+        msgQ.type = WDA_ADD_STA_REQ;
+#else
+        msgQ.type = WDA_ADD_STA_REQ;
+#endif
 
     msgQ.reserved = 0;
     msgQ.bodyptr = pAddStaParams;
@@ -2718,7 +2750,14 @@ limDelSta(
     pDelStaParams->sessionId = psessionEntry->peSessionId;
     
     pDelStaParams->status  = eHAL_STATUS_SUCCESS;
+#ifdef SAP_AUTH_OFFLOAD
+    if (pMac->sap_auth_offload && LIM_IS_AP_ROLE(psessionEntry))
+        msgQ.type = WDA_SAP_OFL_DEL_STA;
+    else
+        msgQ.type = WDA_DELETE_STA_REQ;
+#else
     msgQ.type = WDA_DELETE_STA_REQ;
+#endif
     msgQ.reserved = 0;
     msgQ.bodyptr = pDelStaParams;
     msgQ.bodyval = 0;
@@ -3837,8 +3876,16 @@ tSirRetStatus limStaSendAddBss( tpAniSirGlobal pMac, tpSirAssocRsp pAssocRsp,
             }
             else
             {
-                pAddBssParams->staContext.htLdpcCapable = (tANI_U8)pAssocRsp->HTCaps.advCodingCap;
-                pAddBssParams->staContext.vhtLdpcCapable = (tANI_U8)pAssocRsp->VHTCaps.ldpcCodingCap;
+                if (psessionEntry->txLdpcIniFeatureEnabled & 0x1)
+                    pAddBssParams->staContext.htLdpcCapable =
+                            (tANI_U8)pAssocRsp->HTCaps.advCodingCap;
+                else
+                    pAddBssParams->staContext.htLdpcCapable = 0;
+                if (psessionEntry->txLdpcIniFeatureEnabled & 0x2)
+                    pAddBssParams->staContext.vhtLdpcCapable =
+                        (tANI_U8)pAssocRsp->VHTCaps.ldpcCodingCap;
+                else
+                    pAddBssParams->staContext.vhtLdpcCapable = 0;
             }
 
             if( pBeaconStruct->HTInfo.present )
@@ -3934,6 +3981,7 @@ tSirRetStatus limStaSendAddBss( tpAniSirGlobal pMac, tpSirAssocRsp pAssocRsp,
         psessionEntry->limMlmState = eLIM_MLM_WT_ADD_BSS_RSP_ASSOC_STATE;
     else
         psessionEntry->limMlmState = eLIM_MLM_WT_ADD_BSS_RSP_REASSOC_STATE;
+
     MTRACE(macTrace(pMac, TRACE_CODE_MLM_STATE, psessionEntry->peSessionId, psessionEntry->limMlmState));
 
     limLog(pMac, LOG1, FL("staContext wmmEnabled: %d encryptType: %d "
@@ -4014,7 +4062,7 @@ tSirRetStatus limStaSendAddBssPreAssoc( tpAniSirGlobal pMac, tANI_U8 updateEntry
 
     limExtractApCapabilities( pMac,
                             (tANI_U8 *) bssDescription->ieFields,
-                            limGetIElenFromBssDescription( bssDescription ),
+                            GET_IE_LEN_IN_BSS(bssDescription->length),
                             pBeaconStruct );
 
     if(pMac->lim.gLimProtectionControl != WNI_CFG_FORCE_POLICY_PROTECTION_DISABLE)
@@ -4282,8 +4330,16 @@ tSirRetStatus limStaSendAddBssPreAssoc( tpAniSirGlobal pMac, tANI_U8 updateEntry
             }
             else
             {
-                pAddBssParams->staContext.htLdpcCapable = (tANI_U8)pBeaconStruct->HTCaps.advCodingCap;
-                pAddBssParams->staContext.vhtLdpcCapable = (tANI_U8)pBeaconStruct->VHTCaps.ldpcCodingCap;
+                if (psessionEntry->txLdpcIniFeatureEnabled & 0x1)
+                    pAddBssParams->staContext.htLdpcCapable =
+                            (tANI_U8)pBeaconStruct->HTCaps.advCodingCap;
+                else
+                    pAddBssParams->staContext.htLdpcCapable = 0;
+                if (psessionEntry->txLdpcIniFeatureEnabled & 0x2)
+                    pAddBssParams->staContext.vhtLdpcCapable =
+                        (tANI_U8)pBeaconStruct->VHTCaps.ldpcCodingCap;
+                else
+                    pAddBssParams->staContext.vhtLdpcCapable = 0;
             }
             
             if( pBeaconStruct->HTInfo.present )

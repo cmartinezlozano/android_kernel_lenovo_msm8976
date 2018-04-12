@@ -3686,7 +3686,7 @@ static void tasha_codec_override(struct snd_soc_codec *codec,
 {
 	if (mode == CLS_AB) {
 		switch (event) {
-		case SND_SOC_DAPM_PRE_PMU:
+		case SND_SOC_DAPM_POST_PMU:
 			if (!(snd_soc_read(codec,
 					WCD9335_CDC_RX2_RX_PATH_CTL) & 0x10) &&
 				(!(snd_soc_read(codec,
@@ -3860,9 +3860,6 @@ static int tasha_codec_enable_lineout_pa(struct snd_soc_dapm_widget *w,
 	}
 
 	switch (event) {
-	case SND_SOC_DAPM_PRE_PMU:
-		tasha_codec_override(codec, CLS_AB, event);
-		break;
 	case SND_SOC_DAPM_POST_PMU:
 		/* 5ms sleep is required after PA is enabled as per
 		 * HW requirement
@@ -3875,6 +3872,7 @@ static int tasha_codec_enable_lineout_pa(struct snd_soc_dapm_widget *w,
 			snd_soc_update_bits(codec,
 					    lineout_mix_vol_reg,
 					    0x10, 0x00);
+		tasha_codec_override(codec, CLS_AB, event);
 		break;
 	case SND_SOC_DAPM_POST_PMD:
 		/* 5ms sleep is required after PA is disabled as per
@@ -6246,15 +6244,11 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"RX INT2_1 MIX1", NULL, "RX INT2_1 MIX1 INP1"},
 	{"RX INT2_1 MIX1", NULL, "RX INT2_1 MIX1 INP2"},
 	{"RX INT3_1 MIX1", NULL, "RX INT3_1 MIX1 INP0"},
-#if 1
 	{"RX INT3_1 MIX1", NULL, "Left Channel Output"},
-#endif
 	{"RX INT3_1 MIX1", NULL, "RX INT3_1 MIX1 INP1"},
 	{"RX INT3_1 MIX1", NULL, "RX INT3_1 MIX1 INP2"},
 	{"RX INT4_1 MIX1", NULL, "RX INT4_1 MIX1 INP0"},
-#if 1
 	{"RX INT4_1 MIX1", NULL, "Right Channel Output"},
-#endif
 	{"RX INT4_1 MIX1", NULL, "RX INT4_1 MIX1 INP1"},
 	{"RX INT4_1 MIX1", NULL, "RX INT4_1 MIX1 INP2"},
 	{"RX INT5_1 MIX1", NULL, "RX INT5_1 MIX1 INP0"},
@@ -6684,7 +6678,7 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"RX INT3_1 MIX1 INP0", "RX7", "SLIM RX7"},
 	{"RX INT3_1 MIX1 INP0", "IIR0", "IIR0"},
 	{"RX INT3_1 MIX1 INP0", "IIR1", "IIR1"},
-#if 1
+
 	{"Left Channel Output", "RX0", "SLIM RX0"},
 	{"Left Channel Output", "RX1", "SLIM RX1"},
 	{"Left Channel Output", "RX2", "SLIM RX2"},
@@ -6695,7 +6689,7 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"Left Channel Output", "RX7", "SLIM RX7"},
 	{"Left Channel Output", "IIR0", "IIR0"},
 	{"Left Channel Output", "IIR1", "IIR1"},
-#endif
+
 	{"RX INT3_1 MIX1 INP1", "RX0", "SLIM RX0"},
 	{"RX INT3_1 MIX1 INP1", "RX1", "SLIM RX1"},
 	{"RX INT3_1 MIX1 INP1", "RX2", "SLIM RX2"},
@@ -6727,7 +6721,7 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"RX INT4_1 MIX1 INP0", "RX7", "SLIM RX7"},
 	{"RX INT4_1 MIX1 INP0", "IIR0", "IIR0"},
 	{"RX INT4_1 MIX1 INP0", "IIR1", "IIR1"},
-#if 1
+
 	{"Right Channel Output", "RX0", "SLIM RX0"},
 	{"Right Channel Output", "RX1", "SLIM RX1"},
 	{"Right Channel Output", "RX2", "SLIM RX2"},
@@ -6738,7 +6732,7 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"Right Channel Output", "RX7", "SLIM RX7"},
 	{"Right Channel Output", "IIR0", "IIR0"},
 	{"Right Channel Output", "IIR1", "IIR1"},
-#endif
+
 	{"RX INT4_1 MIX1 INP1", "RX0", "SLIM RX0"},
 	{"RX INT4_1 MIX1 INP1", "RX1", "SLIM RX1"},
 	{"RX INT4_1 MIX1 INP1", "RX2", "SLIM RX2"},
@@ -9183,10 +9177,10 @@ static const struct snd_kcontrol_new rx_int2_1_mix_inp2_mux =
 
 static const struct snd_kcontrol_new rx_int3_1_mix_inp0_mux =
 	SOC_DAPM_ENUM("RX INT3_1 MIX1 INP0 Mux", rx_int3_1_mix_inp0_chain_enum);
-#if 1
+
 static const struct snd_kcontrol_new left_channel_mux =
 	SOC_DAPM_ENUM("Left Channel Output Mux", rx_int3_1_mix_inp0_chain_enum);
-#endif
+
 static const struct snd_kcontrol_new rx_int3_1_mix_inp1_mux =
 	SOC_DAPM_ENUM("RX INT3_1 MIX1 INP1 Mux", rx_int3_1_mix_inp1_chain_enum);
 
@@ -9195,10 +9189,10 @@ static const struct snd_kcontrol_new rx_int3_1_mix_inp2_mux =
 
 static const struct snd_kcontrol_new rx_int4_1_mix_inp0_mux =
 	SOC_DAPM_ENUM("RX INT4_1 MIX1 INP0 Mux", rx_int4_1_mix_inp0_chain_enum);
-#if 1
+
 static const struct snd_kcontrol_new right_channel_mux =
 	SOC_DAPM_ENUM("Right Channel Output Mux", rx_int4_1_mix_inp0_chain_enum);
-#endif
+
 static const struct snd_kcontrol_new rx_int4_1_mix_inp1_mux =
 	SOC_DAPM_ENUM("RX INT4_1 MIX1 INP1 Mux", rx_int4_1_mix_inp1_chain_enum);
 
@@ -9691,10 +9685,8 @@ static const struct snd_soc_dapm_widget tasha_dapm_widgets[] = {
 	SND_SOC_DAPM_MUX("RX INT2_1 MIX1 INP2", SND_SOC_NOPM, 0, 0,
 		&rx_int2_1_mix_inp2_mux),
 	/*line_out_01*/
-#if 1
 	SND_SOC_DAPM_MUX("Left Channel Output", SND_SOC_NOPM, 0, 0,
 		&left_channel_mux),
-#endif
 	SND_SOC_DAPM_MUX_E("RX INT3_1 MIX1 INP0", SND_SOC_NOPM, 0, 0,
 		&rx_int3_1_mix_inp0_mux,tasha_codec_enable_swr,
 		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
@@ -9705,10 +9697,8 @@ static const struct snd_soc_dapm_widget tasha_dapm_widgets[] = {
 		&rx_int3_1_mix_inp2_mux,tasha_codec_enable_swr,
 		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
 	/*line_out_02*/
-#if 1
 	SND_SOC_DAPM_MUX("Right Channel Output", SND_SOC_NOPM, 0, 0,
 		&right_channel_mux),
-#endif
 	SND_SOC_DAPM_MUX_E("RX INT4_1 MIX1 INP0", SND_SOC_NOPM, 0, 0,
 		&rx_int4_1_mix_inp0_mux,tasha_codec_enable_swr,
 		SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
