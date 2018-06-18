@@ -53,11 +53,6 @@
 #define ANDROID_TOUCH_DECLARED
 #endif
 
-/* Pocket_Mod Support */
-#ifdef CONFIG_POCKETMOD
-#include <linux/pocket_mod.h>
-#endif
-
 /* Version, author, desc, etc */
 #define DRIVER_AUTHOR "Dennis Rassmann <showp1984@gmail.com>"
 #define DRIVER_DESCRIPTION "Doubletap2wake for almost any device"
@@ -79,11 +74,21 @@ MODULE_LICENSE("GPLv2");
 #define DT2W_VIBR_DUR_MS  75
 
 /* Values found empirically by tapping on the screen.
- * Note that the X axis seems to correspond to the short edge
- * of the screen, and Y to the long edge.
+ * Note that the X axis (smaller maximum) seems to correspond
+ * to the long edge of the touchscreen, and Y (larger maximum)
+ * to the short edge.
+ * Therefore, the touchscreen seems to report denser values on
+ * one axis than the other. Instead of figuring this out "properly",
+ * we are rescaling the values in software.
+ * Maximums defined below correspond to the post-rescaling situation.
  */
-#define DT2W_MAX_X      2534
-#define DT2W_MAX_Y      1642
+#define DT2W_MAX_X      2560
+#define DT2W_MAX_Y      1640
+
+#define truncate_rescale(coord, old_max, new_max) \
+	(((coord) < 0) ? 0 : \
+	 ((coord) > (old_max)) ? (new_max) : \
+	 ((coord) * (new_max)) / (old_max))
 
 /* Resources */
 int dt2w_switch = DT2W_DEFAULT;
@@ -106,7 +111,7 @@ static struct work_struct dt2w_input_work;
 /* PowerKey setter */
 void doubletap2wake_set_pwrdev(struct input_dev *input_device) {
 	doubletap2wake_pwrdev = input_device;
-	pr_info("set doubletap2wake_pwrdev: %s\n", doubletap2wake_pwrdev->name);
+	pr_info("set doubletap2wake_pwrdev: %s\n", input_device->name);
 }
 EXPORT_SYMBOL(doubletap2wake_set_pwrdev);
 
@@ -206,23 +211,20 @@ static void new_touch(int x, int y)
 	touch_nr++;
 }
 
-/* Doubletap2wake main function */
-static void detect_doubletap2wake(int x, int y, bool st)
+static void dt2w_input_callback(struct work_struct *unused)
 {
-	bool single_touch = st;
 #if DT2W_DEBUG
-	pr_info(LOGTAG"x,y(%4d,%4d) single:%s\n",
-		x, y, (single_touch) ? "true" : "false");
+	pr_info(LOGTAG "x,y (%4d,%4d)\n", touch_x, touch_y);
 #endif
-	if ((single_touch) && (dt2w_switch > 0) && (exec_count) && (touch_cnt)) {
+	if (dt2w_switch && exec_count && touch_cnt) {
 		touch_cnt = false;
 		if (touch_nr == 0) {
-			new_touch(x, y);
+			new_touch(touch_x, touch_y);
 		} else {
-			if ((calc_feather(x, x_pre) < DT2W_FEATHER) &&
-			    (calc_feather(y, y_pre) < DT2W_FEATHER) &&
-			    (!reject_edges(x, y)) &&
-			    ((ktime_to_ms(ktime_get())-tap_time_pre) < DT2W_TIME)) {
+			if ((calc_feather(touch_x, x_pre) < DT2W_FEATHER) &&
+			    (calc_feather(touch_y, y_pre) < DT2W_FEATHER) &&
+			    (!reject_edges(touch_x, touch_y)) &&
+			    ((ktime_to_ms(ktime_get()) - tap_time_pre) < DT2W_TIME)) {
 				pr_info(LOGTAG"ON\n");
 				exec_count = false;
 				doubletap2wake_pwrtrigger();
@@ -230,21 +232,10 @@ static void detect_doubletap2wake(int x, int y, bool st)
 			}
 			else {
 				doubletap2wake_reset();
-				new_touch(x, y);
+				new_touch(touch_x, touch_y);
 			}
 		}
 	}
-}
-
-static void dt2w_input_callback(struct work_struct *unused) {
-	#ifdef CONFIG_POCKETMOD
-	if (device_is_pocketed()){
-		return;
-	}
-	else
-	#endif
-	detect_doubletap2wake(touch_x, touch_y, true);
-	return;
 }
 
 static void dt2w_input_event(struct input_handle *handle, unsigned int type,
@@ -252,10 +243,10 @@ static void dt2w_input_event(struct input_handle *handle, unsigned int type,
 {
 #if DT2W_DEBUG
 	pr_info("doubletap2wake: code: %s|%u, val: %i\n",
-		((code==ABS_MT_POSITION_X) ? "X" :
-		(code==ABS_MT_POSITION_Y) ? "Y" :
-		((code==ABS_MT_TRACKING_ID)||
-			(code==330)) ? "ID" : "undef"), code, value);
+		((code == ABS_MT_POSITION_X) ? "X" :
+		 (code == ABS_MT_POSITION_Y) ? "Y" :
+		((code == ABS_MT_TRACKING_ID) ||
+		 (code == 330)) ? "ID" : "undef"), code, value);
 #endif
 	if (!dt2w_scr_suspended )
 		return;
@@ -266,44 +257,48 @@ static void dt2w_input_event(struct input_handle *handle, unsigned int type,
 	}
 
 	/*
-	 * '330'? Many touch panels are 'broken' in the sense of not following the
-	 * multi-touch protocol given in Documentation/input/multi-touch-protocol.txt.
-	 * According to the docs, touch panels using the type B protocol must send in
-	 * a ABS_MT_TRACKING_ID event after lifting the contact in the first slot.
-	 * This should in the flow of events, help us set the necessary doubletap2wake
-	 * variable and proceed as per the algorithm.
+	 * '330'? Many touch panels are 'broken' in the sense of not following
+	 * the multi-touch protocol given in
+	 * Documentation/input/multi-touch-protocol.txt.  According to the
+	 * docs, touch panels using the type B protocol must send in a
+	 * ABS_MT_TRACKING_ID event after lifting the contact in the first
+	 * slot.  This should in the flow of events, help us set the necessary
+	 * doubletap2wake variable and proceed as per the algorithm.
 	 *
-	 * This however is not the case with various touch panel drivers, and hence
-	 * there is no reliable way of tracking ABS_MT_TRACKING_ID on such panels.
-	 * Some of the panels however do track the lifting of contact, but with a
-	 * different event code, and a different event value.
+	 * This however is not the case with various touch panel drivers, and
+	 * hence there is no reliable way of tracking ABS_MT_TRACKING_ID on
+	 * such panels.  Some of the panels however do track the lifting of
+	 * contact, but with a different event code, and a different event
+	 * value.
 	 *
-	 * So, add checks for those event codes and values to keep the algo flow.
+	 * So, add checks for those event codes and values to keep the algo
+	 * flow.
 	 *
 	 * synaptics_s3203 => code: 330; val: 0
 	 *
-	 * Note however that this is not possible with panels like the CYTTSP3 panel
-	 * where there are no such events being reported for the lifting of contacts
-	 * though i2c data has a ABS_MT_TRACKING_ID or equivalent event variable
-	 * present. In such a case, make sure the touch_cnt variable is publicly
-	 * available for modification.
+	 * Note however that this is not possible with panels like the CYTTSP3
+	 * panel where there are no such events being reported for the lifting
+	 * of contacts though i2c data has a ABS_MT_TRACKING_ID or equivalent
+	 * event variable present. In such a case, make sure the touch_cnt
+	 * variable is publicly available for modification.
 	 *
 	 */
-	if ((code == ABS_MT_TRACKING_ID && value == -1) || (code == 330 && value == 0)) {
+	if ((code == ABS_MT_TRACKING_ID && value == -1) ||
+	    (code == 330 && value == 0)) {
 		touch_cnt = true;
 		return;
 	}
-
+	/* Work around a (hardware?) bug by manually rescaling
+	 * x and y to the correct maximums.
+	 */
 	if (code == ABS_MT_POSITION_X) {
-		touch_x = value;
+		touch_x = truncate_rescale(value, DT2W_MAX_Y, DT2W_MAX_X);
 		touch_x_called = true;
 	}
-
 	if (code == ABS_MT_POSITION_Y) {
-		touch_y = value;
+		touch_y = truncate_rescale(value, DT2W_MAX_X, DT2W_MAX_Y);
 		touch_y_called = true;
 	}
-
 	if (touch_x_called || touch_y_called) {
 		touch_x_called = false;
 		touch_y_called = false;
@@ -311,7 +306,8 @@ static void dt2w_input_event(struct input_handle *handle, unsigned int type,
 	}
 }
 
-static int input_dev_filter(struct input_dev *dev) {
+static int input_dev_filter(struct input_dev *dev)
+{
 	if (strstr(dev->name, "synaptics_dsx")) {
 		return 0;
 	} else {
@@ -435,8 +431,8 @@ dt2w_doubletap2wake_dump(struct device *dev, struct device_attribute *attr,
 static DEVICE_ATTR(doubletap2wake, (S_IRUGO|S_IWUGO),
 	dt2w_doubletap2wake_show, dt2w_doubletap2wake_dump);
 
-static ssize_t dt2w_version_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t dt2w_version_show(struct device *dev, struct device_attribute *attr,
+                                 char *buf)
 {
 	size_t count = 0;
 
@@ -446,7 +442,8 @@ static ssize_t dt2w_version_show(struct device *dev,
 }
 
 static ssize_t dt2w_version_dump(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t count)
+                                 struct device_attribute *attr,
+                                 const char *buf, size_t count)
 {
 	return count;
 }
@@ -463,6 +460,7 @@ extern struct kobject *android_touch_kobj;
 struct kobject *android_touch_kobj;
 EXPORT_SYMBOL_GPL(android_touch_kobj);
 #endif
+
 static int __init doubletap2wake_init(void)
 {
 	int rc = 0;
